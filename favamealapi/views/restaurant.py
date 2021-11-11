@@ -4,13 +4,13 @@ from django.http import HttpResponseServerError
 from rest_framework import serializers, status
 from rest_framework.response import Response
 from rest_framework.viewsets import ViewSet
-from favamealapi.models import Restaurant
+from favamealapi.models import Restaurant, restaurant
 from favamealapi.models.favoriterestaurant import FavoriteRestaurant
-
+from rest_framework.decorators import action
 
 class RestaurantSerializer(serializers.ModelSerializer):
     """JSON serializer for restaurants"""
-
+ 
     class Meta:
         model = Restaurant
         fields = ('id', 'name', 'address', 'favorite',)
@@ -69,8 +69,9 @@ class RestaurantView(ViewSet):
             Response -- JSON serialized list of restaurants
         """
         restaurants = Restaurant.objects.all()
-
-        # TODO: Add the correct value to the `favorite` property of each restaurant
+        user = request.auth.user
+        for restaurant in restaurants:
+            restaurant.favorite = user
 
 
         serializer = RestaurantSerializer(restaurants, many=True, context={'request': request})
@@ -79,3 +80,25 @@ class RestaurantView(ViewSet):
 
     # TODO: Write a custom action named `star` that will allow a client to
     # send a POST and a DELETE request to /restaurant/2/star
+    @action(methods=['post','delete'], detail=True)
+    def star(self,request, pk=None):
+        '''Handles Posting to favorites'''
+        user = request.auth.user
+        try:
+            restaurant = Restaurant.objects.get(pk=pk)
+        except Restaurant.DoesNotExist:
+            return Response({'message': 'Restaurant does not exist'}, status=status.HTTP_400_BAD_REQUEST)
+        if request.method == 'POST':
+            try:
+                restaurant.favorites.add(user)
+                return Response({}, status=status.HTTP_201_CREATED)
+            except Exception as ex:
+                return Response({"message": ex.args[0]})
+        if request.method == "DELETE":
+            try:
+                restaurant.favorites.remove(user)
+                return Response({}, status=status.HTTP_201_CREATED)
+            except Exception as ex:
+                return Response({"message": ex.args[0]})
+
+
